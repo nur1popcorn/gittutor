@@ -1,4 +1,8 @@
+use std::env;
+use std::path::PathBuf;
+
 use clap::Parser;
+use git2::Repository;
 
 /// A simple program to judge your usage of git
 #[derive(Parser, Debug)]
@@ -8,11 +12,23 @@ struct Args {
     #[arg(short, long)]
     author: Option<String>,
 
-    /// Sets a cutoff date
-    #[arg(short, long)]
-    date: Option<u8>,
+    /// The path to the repository which should be scored
+    #[arg(group = "input", default_value_t = String::from("."))]
+    input_path: String
 }
 
 fn main() {
-    let args = Args::parse();
+    let args: Args = Args::parse();
+    let repo = Repository::open(args.input_path)
+        .expect("Failed to locate the git repository.");
+
+    // construct a revwalk to iterate over commit graph
+    let mut revwalk = repo.revwalk().unwrap();
+    revwalk.push_head().unwrap();
+
+    for oid in revwalk {
+        let oid = oid.unwrap();
+        let commit = repo.find_commit(oid).unwrap();
+
+    }
 }
