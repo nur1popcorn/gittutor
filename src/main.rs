@@ -10,7 +10,7 @@ use git2::Repository;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Sets a specific author
+    /// Sets a specific author by name or email
     #[arg(short, long)]
     author: Option<String>,
 
