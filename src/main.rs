@@ -1,3 +1,5 @@
+mod stats;
+
 use std::env;
 use std::path::PathBuf;
 
