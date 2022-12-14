@@ -53,6 +53,10 @@ impl Display for Author {
     }
 }
 
+fn is_capitalized(word: &str) -> bool {
+    word.len() > 0 && word.chars().next().unwrap().is_uppercase()
+}
+
 #[derive(Debug)]
 pub struct Stats {
     pub commit_summery: String,
@@ -100,8 +104,13 @@ impl Stats {
         for p in punctuation_chars {
             sum -= self.commit_summery.matches(p).count() as i32;
         }
+
+        // check if the first character of the commit summery is capitalized
+        sum += if is_capitalized(&self.commit_summery) { 3 } else { -3 };
+
         // check if is written in imperative form
-        for w in self.commit_summery.split(" ") {
+        let split = self.commit_summery.split_whitespace();
+        for w in split {
             sum += common_words_table.get(w).unwrap_or(&0)
         }
 
@@ -121,3 +130,4 @@ impl Stats {
             + if self.signed { 10 } else { 0 }, 0)
     }
 }
+
