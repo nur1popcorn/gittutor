@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::collections::HashMap;
 use std::hash::{Hash};
 use std::io::{Cursor, Read};
@@ -16,24 +17,39 @@ pub struct Author {
 }
 
 impl Author {
-    fn get_issuer_key_id(buf: Option<(Buf, Buf)>) -> Option<[u8; 8]> {
-        let buf = buf?.0;
+    fn get_issuer_key_id(buf: &Buf) -> [u8; 8] {
         // extract the raw signature data
         let mut dearmor = Dearmor::new(Cursor::new(buf.as_ref()));
         let mut bytes = Vec::new();
-        dearmor.read_to_end(&mut bytes).ok()?;
+        dearmor.read_to_end(&mut bytes).ok();
 
         // parse the signature and read the issuer
-        let sig = StandaloneSignature::from_bytes(Cursor::new(bytes)).ok()?;
-        <[u8; 8]>::try_from(sig.signature.issuer()?.as_ref().clone()).ok()
+        let sig = StandaloneSignature::from_bytes(Cursor::new(bytes));
+        <[u8; 8]>::try_from(sig.unwrap().signature.issuer().unwrap().as_ref()).unwrap()
     }
 
     pub fn new(signature: Signature, key_id: Option<(Buf, Buf)>) -> Self {
         Self {
             name: String::from(signature.name().unwrap()),
             email: String::from(signature.email().unwrap()),
-            key_id:  Author::get_issuer_key_id(key_id)
+            key_id: key_id.map(|key_id| { Author::get_issuer_key_id(&key_id.0) })
         }
+    }
+
+    pub fn matches(&self, pattern: &str) -> bool {
+        let key_id = self.key_id.map(|key_id| {
+            hex::encode(key_id).contains(pattern) });
+        self.name.to_lowercase().contains(pattern) ||
+        self.email.to_lowercase().contains(pattern) ||
+        (key_id.is_some() && key_id.unwrap())
+    }
+}
+
+impl Display for Author {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = &self.name;
+        let email = &self.email;
+        write!(f, "{name} {email}")
     }
 }
 

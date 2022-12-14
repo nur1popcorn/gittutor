@@ -1,3 +1,5 @@
+extern crate core;
+
 mod stats;
 
 use std::cmp::min;
@@ -11,18 +13,13 @@ use crate::stats::*;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Sets a specific author by name or email
-    #[arg(short, long)]
-    author: Option<String>,
-
     /// The path to the repository which should be scored
     #[arg(group = "input", default_value_t = String::from("."))]
     input_path: String,
 
-    /// Indicates if the used issuer key id is unique
-    #[arg(long, default_value_t = false)]
-    issuer: bool,
-
+    /// Sets a specific author by name or email or issuer key id
+    #[arg(short, long)]
+    author: Option<String>,
     /// The number of authors which should be shown
     #[arg(short, default_value_t = 10)]
     n: usize
@@ -39,15 +36,14 @@ fn main() {
     // construct a revwalk to iterate over commit graph
     let mut revwalk = repo.revwalk().unwrap();
     revwalk.push_head().unwrap();
-
+    
     let mut stats_vec: Vec<(Author, Stats)> = Vec::new();
     for oid in revwalk {
         let oid = oid.unwrap();
         let commit = repo.find_commit(oid).unwrap();
         let signature = repo.extract_signature(&oid, None);
         let stats = Stats::from(&repo, &commit, signature.is_ok());
-        let author = Author::new(commit.author(),
-            if args.issuer { signature.ok() } else { None });
+        let author = Author::new(commit.author(), signature.ok());
         stats_vec.push((author, stats));
     }
 
@@ -56,18 +52,21 @@ fn main() {
         *stats_map.entry(author).or_insert(0) += stats.score();
     }
 
+    let mut result_vec: Vec<(&Author, &i32)> = stats_map.iter().collect();
+    result_vec.sort_by(|a, b| { b.1.cmp(&a.1) });
     if args.author.is_some() {
-
+        let pattern: String = args.author.unwrap().to_lowercase();
+        for i in 0 .. result_vec.len() {
+            let (author, score) = result_vec[i];
+            if author.matches(&pattern) {
+                println!("#{}\t({score})\t{author}", i + 1);
+            }
+        }
     } else {
         // print the top n commit authors
-        let mut result_vec: Vec<(&Author, &i32)> = stats_map.iter().collect();
-        result_vec.sort_by(|a, b| { b.1.cmp(&a.1) });
         for i in 0 .. min(result_vec.len(), args.n) {
-            let author = &result_vec[i].0;
-            let name = &author.name;
-            let email = &author.email;
-            let score = &result_vec[i].1;
-            println!("#{}\t({score})\t {name} {email}", i + 1);
+            let (author, score) = result_vec[i];
+            println!("#{}\t({score})\t{author}", i + 1);
         }
     }
 }
