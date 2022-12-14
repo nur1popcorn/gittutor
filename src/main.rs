@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use clap::Parser;
 use git2::Repository;
 
+use crate::stats::*;
+
 /// A simple program to judge your usage of git
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -32,5 +34,7 @@ fn main() {
         let oid = oid.unwrap();
         let commit = repo.find_commit(oid).unwrap();
 
+        let stats = Stats::from(&repo, &commit, false);
+        println!("{}", stats.inserts);
     }
 }
