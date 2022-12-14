@@ -27,11 +27,16 @@ fn main() {
     let mut revwalk = repo.revwalk().unwrap();
     revwalk.push_head().unwrap();
 
+    let mut result_vec: Vec<(Author, Stats)> = Vec::new();
     for oid in revwalk {
         let oid = oid.unwrap();
         let commit = repo.find_commit(oid).unwrap();
-
-        let stats = Stats::from(&repo, &commit, false);
-        println!("{}", stats.inserts);
+        let signature = repo.extract_signature(&oid, None);
+        let stats = Stats::from(&repo, &commit, signature.is_ok());
+        let author = Author::new(commit.author(), signature.ok());
+        result_vec.push((author, stats));
     }
+
+    result_vec.sort_by(|a, b| { a.1.score().cmp(&b.1.score()) });
+    println!("{:?}", result_vec);
 }

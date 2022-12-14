@@ -3,18 +3,41 @@ use std::hash::{Hash};
 use std::io::{Cursor, Read};
 use std::cmp::{max, min};
 
-use git2::{Buf, Commit, Repository};
+use git2::{Buf, Commit, Repository, Signature};
 
 use pgp::armor::Dearmor;
 use pgp::{Deserializable, StandaloneSignature};
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub struct Author {
-    name: String,
-    email: String,
-    key_id: Option<[u8; 8]>
+    pub name: String,
+    pub email: String,
+    pub key_id: Option<[u8; 8]>
 }
 
+impl Author {
+    fn get_issuer_key_id(buf: Option<(Buf, Buf)>) -> Option<[u8; 8]> {
+        let buf = buf?.0;
+        // extract the raw signature data
+        let mut dearmor = Dearmor::new(Cursor::new(buf.as_ref()));
+        let mut bytes = Vec::new();
+        dearmor.read_to_end(&mut bytes).ok()?;
+
+        // parse the signature and read the issuer
+        let sig = StandaloneSignature::from_bytes(Cursor::new(bytes)).ok()?;
+        <[u8; 8]>::try_from(sig.signature.issuer()?.as_ref().clone()).ok()
+    }
+
+    pub fn new(signature: Signature, key_id: Option<(Buf, Buf)>) -> Self {
+        Self {
+            name: String::from(signature.name().unwrap()),
+            email: String::from(signature.email().unwrap()),
+            key_id:  Author::get_issuer_key_id(key_id)
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Stats {
     pub commit_summery: String,
     pub inserts: usize,
@@ -79,17 +102,6 @@ impl Stats {
     pub fn score(&self) -> i32 {
         max((self.inserts as f32).powf(0.69) as i32
             + self.score_commit_message()
-            + if self.signed { 5 } else { 0 }, 0)
+            + if self.signed { 10 } else { 0 }, 0)
     }
-}
-
-fn get_issuer_key_id(buf: Buf) -> Option<[u8; 8]> {
-    // extract the raw signature data
-    let mut dearmor = Dearmor::new(Cursor::new(buf.as_ref()));
-    let mut bytes = Vec::new();
-    dearmor.read_to_end(&mut bytes).ok()?;
-
-    // parse the signature and read the issuer
-    let sig = StandaloneSignature::from_bytes(Cursor::new(bytes)).ok()?;
-    <[u8; 8]>::try_from(sig.signature.issuer()?.as_ref().clone()).ok()
 }
