@@ -1,8 +1,5 @@
 mod stats;
 
-use std::env;
-use std::path::PathBuf;
-
 use clap::Parser;
 use git2::Repository;
 

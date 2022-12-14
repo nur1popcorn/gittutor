@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash};
 use std::io::{Cursor, Read};
 use std::cmp::{max, min};
 
