@@ -16,16 +16,12 @@ struct Args {
     /// The path to the repository which should be scored
     #[arg(group = "input", default_value_t = String::from("."))]
     input_path: String,
-
     /// Sets a specific author by name or email or issuer key id
     #[arg(short, long)]
     author: Option<String>,
     /// The number of authors which should be shown
     #[arg(short, default_value_t = 10)]
     n: usize
-
-    // detail flag provides graphs for author
-    // list good commits i.e. commits with a high score
 }
 
 fn main() {
