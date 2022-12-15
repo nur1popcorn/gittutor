@@ -1,10 +1,11 @@
 use std::fmt::{Display, Formatter};
-use std::collections::HashMap;
+use std::collections::{HashSet};
 use std::hash::{Hash};
 use std::io::{Cursor, Read};
 use std::cmp::{max, min};
 
 use git2::{Buf, Commit, Repository, Signature};
+use gnuplot::*;
 
 use pgp::armor::Dearmor;
 use pgp::{Deserializable, StandaloneSignature};
@@ -62,7 +63,8 @@ pub struct Stats {
     pub commit_summery: String,
     pub inserts: usize,
     pub deletes: usize,
-    pub signed: bool
+    pub signed: bool,
+    pub timestamp: i64
 }
 
 impl Stats {
@@ -85,49 +87,101 @@ impl Stats {
             inserts = stats.insertions();
             deletes = stats.deletions();
         }
-
-        Self { commit_summery, inserts, deletes, signed }
+        let timestamp = commit.time().seconds();
+        Self { commit_summery, inserts, deletes, signed, timestamp }
     }
 
-    fn score_commit_message(&self) -> i32 {
+    fn compute_magic(summery_len: usize) -> i32 {
+        // put the length of the summery through a magic function such that ideally < 50 chars
+        min((-((summery_len as f32 - 25.0) / 6.0) *
+              ((summery_len as f32 - 25.0) / 6.0) + 15.0) as i32, 10)
+    }
+
+    pub fn score_loss(&self) -> i32 {
         let punctuation_chars: Vec<&str> = vec![".", "!", "?", ",", ";"];
-        let common_words_table: HashMap<&str, i32> = HashMap::from([
-            ("add",    1), ("added",   -1), ("adds",    -1),
-            ("remove", 1), ("removed", -1), ("removes", -1),
-            ("fix",    1), ("fixed",   -1), ("fixes",   -1),
-            ("move",   1), ("moved",   -1), ("moves",   -1),
-            ("merge",  1), ("merged",  -1), ("merges",  -1),
+        let common_words_table = HashSet::from([
+            "added",   "adds",
+            "removed", "removes",
+            "fixed",   "fixes",
+            "moved",   "moves",
+            "merged",  "merges",
         ]);
 
-        // grade the punctuation of the commit message
         let mut sum: i32 = 0;
+        // grade the punctuation of the commit message
         for p in punctuation_chars {
-            sum -= self.commit_summery.matches(p).count() as i32;
+            sum += self.commit_summery.matches(p).count() as i32;
         }
 
-        // check if the first character of the commit summery is capitalized
-        sum += if is_capitalized(&self.commit_summery) { 3 } else { -3 };
-
-        // check if is written in imperative form
+        // check if is not written in imperative form
         let split = self.commit_summery.split_whitespace();
         for w in split {
-            sum += common_words_table.get(w).unwrap_or(&0)
+            if common_words_table.contains(w) {
+                sum += 1;
+            }
         }
 
         // bound the result of the previous evaluations
-        sum = max(min(sum, 2), -2) * 3;
+        sum = min(sum, 5) * 4;
 
-        // put the length of the summery through a magic function such that ideally < 50 chars
-        let magic =
-            - ((self.commit_summery.len() as f32 - 25.0) / 6.0) *
-              ((self.commit_summery.len() as f32 - 25.0) / 6.0) + 15.0;
-        sum + min(magic as i32, 10)
+        // check if the first character of the commit summery is capitalized
+        if !is_capitalized(&self.commit_summery) {
+            sum += 3;
+        }
+        if !self.signed { sum += 5; }
+        let magic = Stats::compute_magic(self.commit_summery.len());
+        if magic < 0 { sum += magic; }
+        sum
+    }
+
+    pub fn score_gain(&self) -> i32 {
+        let common_words_table = HashSet::from([
+            "add", "remove", "fix", "move", "merge"
+        ]);
+
+        let mut sum: i32 = 0;
+        // check if is written in imperative form
+        let split = self.commit_summery.split_whitespace();
+        for w in split {
+            if common_words_table.contains(w) {
+                sum += 1;
+            }
+        }
+
+        // bound the result of the previous evaluation
+        sum = min(sum, 2) * 3;
+
+        // check if the first character of the commit summery is capitalized
+        if is_capitalized(&self.commit_summery) {
+            sum += 3;
+        }
+
+        if self.signed { sum += 10; }
+        let magic = Stats::compute_magic(self.commit_summery.len());
+        if magic > 0 { sum += magic; }
+        // TODO: consider lowering the impact of inserts even more.
+        sum + (self.inserts as f32).powf(0.69) as i32
     }
 
     pub fn score(&self) -> i32 {
-        max((self.inserts as f32).powf(0.69) as i32
-            + self.score_commit_message()
-            + if self.signed { 10 } else { 0 }, 0)
+        max(self.score_gain() - self.score_loss(), 0)
     }
 }
 
+pub fn plot_gain_loss(nice: bool, x: Vec<i64>, y1: Vec<i32>, y2: Vec<i32>) {
+    let y_0 = vec![0; x.len()];
+    let mut fg = Figure::new();
+    fg.set_pre_commands("set colorsequence classic")
+      .set_title("Score Loss Comparison");
+    if !nice { fg.set_terminal("dumb ansi256", ""); }
+    fg.axes2d()
+      .set_x_ticks(Some((AutoOption::from(Auto), 0)), &[Format("%d/%m")], &[])
+      .set_x_time(true)
+      .set_x_label("Date", &[])
+      .set_y_label("Points", &[])
+      .set_x_range(AutoOption::from(Fix(x[0] as f64)),
+                   AutoOption::from(Fix(x[x.len() - 1] as f64)))
+      .fill_between(&x, &y_0, &y1, &[FillRegion(Below), Color("black")])
+      .fill_between(&x, &y1, &y2, &[FillRegion(Below), Color("red")]);
+    fg.show().unwrap();
+}

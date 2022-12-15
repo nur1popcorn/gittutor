@@ -21,7 +21,10 @@ struct Args {
     author: Option<String>,
     /// The number of authors which should be shown
     #[arg(short, default_value_t = 10)]
-    n: usize
+    n: usize,
+    /// Set if the plot should not be written to stdout
+    #[arg(long)]
+    nice: bool
 }
 
 fn main() {
@@ -43,12 +46,12 @@ fn main() {
         stats_vec.push((author, stats));
     }
 
-    let mut stats_map = HashMap::new();
-    for (author, stats) in stats_vec {
+    let mut stats_map: HashMap<&Author, i32> = HashMap::new();
+    for (author, stats) in stats_vec.iter() {
         *stats_map.entry(author).or_insert(0) += stats.score();
     }
 
-    let mut result_vec: Vec<(&Author, &i32)> = stats_map.iter().collect();
+    let mut result_vec: Vec<(&&Author, &i32)> = stats_map.iter().collect();
     result_vec.sort_by(|a, b| { b.1.cmp(&a.1) });
     if args.author.is_some() {
         let pattern: String = args.author.unwrap().to_lowercase();
@@ -56,6 +59,21 @@ fn main() {
             let (author, score) = result_vec[i];
             if author.matches(&pattern) {
                 println!("#{}\t({score})\t{author}", i + 1);
+
+                // collect the data for plotting
+                let mut s1 = 0; let mut s2 = 0;
+                let mut x = Vec::new();
+                let mut y1 = Vec::new(); let mut y2 = Vec::new();
+                for (author_curr, stats) in stats_vec.iter() {
+                    if *author != author_curr { continue }
+                    let score = stats.score();
+                    let loss = stats.score_loss();
+                    s1 += score;
+                    s2 += score + loss;
+                    x.push(stats.timestamp);
+                    y1.push(s1); y2.push(s2);
+                }
+                if x.len() > 1 { plot_gain_loss(args.nice, x, y1, y2); }
             }
         }
     } else {
