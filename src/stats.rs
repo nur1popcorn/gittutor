@@ -105,6 +105,7 @@ impl Stats {
             "fixed",   "fixes",
             "moved",   "moves",
             "merged",  "merges",
+            "updated",  "updates",
         ]);
 
         let mut sum: i32 = 0;
@@ -131,12 +132,14 @@ impl Stats {
         if !self.signed { sum += 5; }
         let magic = Stats::compute_magic(self.commit_summery.len());
         if magic < 0 { sum += magic; }
+        // strongly discourage large commits
+        sum += ((self.inserts as f32).powf(0.55) - (self.inserts as f32).sqrt()) as i32;
         sum
     }
 
     pub fn score_gain(&self) -> i32 {
         let common_words_table = HashSet::from([
-            "add", "remove", "fix", "move", "merge"
+            "add", "remove", "fix", "move", "merge", "update"
         ]);
 
         let mut sum: i32 = 0;
@@ -159,8 +162,7 @@ impl Stats {
         if self.signed { sum += 10; }
         let magic = Stats::compute_magic(self.commit_summery.len());
         if magic > 0 { sum += magic; }
-        // TODO: consider lowering the impact of inserts even more.
-        sum + (self.inserts as f32).powf(0.69) as i32
+        sum + (self.inserts as f32).sqrt() as i32
     }
 
     pub fn score(&self) -> i32 {
