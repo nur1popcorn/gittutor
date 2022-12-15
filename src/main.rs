@@ -24,7 +24,10 @@ struct Args {
     n: usize,
     /// Set if the plot should not be written to stdout
     #[arg(long)]
-    nice: bool
+    nice: bool,
+    /// Compare the issuer key id of the commit signature
+    #[arg(long)]
+    issuer: bool,
 }
 
 fn main() {
@@ -42,7 +45,8 @@ fn main() {
         let commit = repo.find_commit(oid).unwrap();
         let signature = repo.extract_signature(&oid, None);
         let stats = Stats::from(&repo, &commit, signature.is_ok());
-        let author = Author::new(commit.author(), signature.ok());
+        let author = Author::new(commit.author(),
+            if args.issuer { signature.ok() } else { None });
         stats_vec.push((author, stats));
     }
 
