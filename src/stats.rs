@@ -181,7 +181,7 @@ pub fn plot_gain_loss(nice: bool, x: Vec<i64>, y1: Vec<i32>, y2: Vec<i32>) {
       .set_y_label("Points", &[])
       .set_x_range(AutoOption::from(Fix(x[0] as f64)),
                    AutoOption::from(Fix(x[x.len() - 1] as f64)))
-      .fill_between(&x, &y_0, &y1, &[FillRegion(Below), Color("black")])
-      .fill_between(&x, &y1, &y2, &[FillRegion(Below), Color("red")]);
+      .fill_between(&x, &y_0, &y1, &[FillRegion(Below), Color("black"), Caption("Score")])
+      .fill_between(&x, &y1, &y2, &[FillRegion(Below), Color("red"), Caption("Score Loss")]);
     fg.show().unwrap();
 }
